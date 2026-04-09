@@ -1,6 +1,9 @@
 import argparse
 import configparser
 import os
+import urllib.request
+import urllib.error
+import json
 from typing import Dict
 
 class ModelManager:
@@ -70,14 +73,68 @@ class ModelManager:
                 except OSError as e:
                     print(f"Error creating directory {target_dir}: {e}")
 
+    def download_manifest(self, model_name: str) -> dict:
+        """
+        Downloads the manifest file for a given model name.
+        Parses the name and tag, constructs the URL from the config, and saves the file.
+        """
+        # Parse model name and tag (default to 'latest' if no tag is provided)
+        if ':' in model_name:
+            name, tag = model_name.split(':', 1)
+        else:
+            name = model_name
+            tag = "latest"
+
+        # Construct the URL
+        url_template = self.config.get('ollama_manifests')
+        if not url_template:
+            print("Error: 'ollama_manifests' URL template not found in configuration.")
+            return {}
+
+        url = url_template.replace('$name', name).replace('$tag', tag)
+        print(f"Downloading manifest from: {url}")
+
+        # Determine the save path based on the config
+        manifest_base = self.config.get('manifests', '').replace('~/.ollama/', '').lstrip('/')
+        save_dir = os.path.join("output", manifest_base, name)
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, tag)
+
+        # Perform the download
+        try:
+            # Ollama registry requires specific Accept headers for manifests
+            headers = {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'}
+            req = urllib.request.Request(url, headers=headers)
+            
+            with urllib.request.urlopen(req) as response:
+                data = response.read()
+                
+            with open(save_path, 'wb') as f:
+                f.write(data)
+                
+            print(f"   ✅ Manifest saved to {save_path}")
+            return json.loads(data.decode('utf-8'))
+            
+        except urllib.error.URLError as e:
+            print(f"   ❌ Failed to download manifest: {e}")
+            return {}
+        except json.JSONDecodeError:
+            print(f"   ❌ Failed to parse manifest JSON.")
+            return {}
+
     def download_model(self, model_name: str):
         """
-        Placeholder method to handle the model download process.
+        Handles the model download process.
         """
         print(f"--- Initiating Download Process ---")
         print(f"Attempting to download model: {model_name}")
-        print(f"Configuration loaded successfully. Example setting: {self.config.get('manifests', 'N/A')}")
-        # Future download logic will go here
+        
+        manifest = self.download_manifest(model_name)
+        if not manifest:
+            print("Aborting download process due to missing manifest.")
+            return
+            
+        print("Manifest downloaded successfully. Ready for next steps.")
 
 def main():
     """
