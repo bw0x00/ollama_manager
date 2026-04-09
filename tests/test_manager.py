@@ -153,7 +153,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         mock_exists.return_value = False
         
         test_data = b"dummy layer data"
-        expected_size = 9999 # Intentionally wrong size
+        expected_size = 5 # Intentionally wrong size (smaller than test_data to exit the while loop)
         expected_digest = f"sha256:{hashlib.sha256(test_data).hexdigest()}"
 
         mock_response = MagicMock()
