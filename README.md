@@ -5,7 +5,10 @@ This tool is a comprehensive CLI downloader and manager for AI models intended f
 
 ## ✨ Features
 - **Direct Registry Downloads:** Fetches model manifests and layer blobs directly from the Ollama registry.
+- **Resumable Downloads & Auto-Retry:** Automatically resumes interrupted downloads and retries stalled connections after a 10-second delay.
+- **Disk Space Verification:** Checks for sufficient free disk space before initiating downloads to prevent incomplete files.
 - **Integrity Verification:** Automatically verifies downloaded blobs against expected SHA256 hashes and file sizes.
+- **Graceful Interruption:** Safely handles `Ctrl+C` to exit gracefully without corrupting data.
 - **Ollama Directory Structure:** Replicates the native Ollama `~/.ollama/models` directory structure inside a local `output/` folder.
 - **Zero Dependencies:** Built entirely using Python's standard library (`urllib`, `hashlib`, `json`, `argparse`). No `pip install` required!
 
