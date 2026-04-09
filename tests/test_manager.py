@@ -8,7 +8,7 @@ import hashlib
 
 # Assuming src/manager.py is importable or we adjust the path for testing
 # For this test file, we assume we can import the class directly.
-from src.manager import ModelManager
+from ollama_manager.manager import ModelManager
 
 class TestModelManager(unittest.TestCase):
 

@@ -1,2 +1,4 @@
 .aider*
 output/
+testresults/
+*pycache*
