@@ -113,7 +113,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
             
             self.assertEqual(manifest, mock_manifest_data)
             # Verify file was opened for writing
-            mocked_file.assert_called_once()
+            mocked_api_call = mocked_file.assert_called_once()
 
     @patch('shutil.disk_usage')
     @patch('os.path.exists')
@@ -281,6 +281,40 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         
         # Should not move anything
         mock_move.assert_not_called()
+
+    @patch('ollama_manager.manager.ModelManager.download_manifest')
+    @patch('ollama_manager.manager.ModelManager.download_model_files')
+    @patch('ollama_manager.manager.ModelManager.move_model')
+    def test_download_model_install_true(self, mock_move, mock_files, mock_manifest):
+        """Tests that move_model is called when install=True."""
+        mock_manifest.return_value = {"config": {"digest": "sha256:123"}}
+        mock_files.return_value = True
+        
+        manager = ModelManager(config_path=self.temp_config_path)
+        manager.download_model("testmodel:latest", install=True)
+        
+        mock_move.assert_called_once()
+
+    @patch('ollama_manager.manager.ModelManager.download_manifest')
+    @patch('ollama_manager.manager.ModelManager.download_model_files')
+    @patch('ollama_manager.manager.ModelManager.move_model')
+    @patch('builtins.print')
+    def test_download_model_install_false(self, mock_print, mock_move, mock_files, mock_manifest):
+        """Tests that move_model is NOT called and commands are printed when install=False."""
+        mock_manifest.return_value = {"config": {"digest": "sha256:123"}}
+        mock_files.return_value = True
+        
+        manager = ModelManager(config_path=self.temp_config_path)
+        manager.download_model("testmodel:latest", install=False)
+        
+        # Verify move_model was NOT called
+        mock_move.assert_not_called()
+        
+        # Verify that the manual installation header was printed
+        # We check if any call to print contained the specific string
+        print_args = [call.args[0] for call in mock_print.call_args_list if call.args]
+        manual_cmd_found = any("Manual Installation Commands" in str(arg) for arg in print_args)
+        self.assertTrue(manual_cmd_found, "Manual installation commands were not printed.")
 
 if __name__ == '__main__':
     unittest.main()
