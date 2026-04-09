@@ -62,8 +62,8 @@ ollama_manifests = https://registry.ollama.ai/v2/library/$name/manifests/$tag
         
         # Expected paths after stripping "~/.ollama/" and prepending "output/"
         expected_calls = [
-            unittest.mock.call(os.path.join("output", "models/manifests/registry.ollama.ai/library")),
-            unittest.mock.call(os.path.join("output", "models/blobs"))
+            unittest.mock.call(os.path.join("output", "models/manifests/registry.ollama.ai/library"), exist_ok=True),
+            unittest.mock.call(os.path.join("output", "models/blobs"), exist_ok=True)
         ]
         
         # Assert that os.makedirs was called exactly twice with the correct paths
@@ -86,8 +86,8 @@ ollama_manifests = https://registry.ollama.ai/v2/library/$name/manifests/$tag
     
         # Expected paths after stripping "~/.ollama/" and prepending "output/"
         expected_calls = [
-            unittest.mock.call(os.path.join("output", "models/manifests/registry.ollama.ai/library")),
-            unittest.mock.call(os.path.join("output", "models/blobs"))
+            unittest.mock.call(os.path.join("output", "models/manifests/registry.ollama.ai/library"), exist_ok=True),
+            unittest.mock.call(os.path.join("output", "models/blobs"), exist_ok=True)
         ]
     
         # Assert that os.makedirs was called exactly twice with the correct paths
