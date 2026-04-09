@@ -173,6 +173,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
     @patch('os.makedirs')
     def test_download_model_files(self, mock_makedirs, mock_download_blob):
         """Tests that download_model_files correctly extracts digests and calls download_blob."""
+        mock_download_blob.return_value = True
         mock_manifest = {
             "config": {"digest": "sha256:config123", "size": 500},
             "layers": [
@@ -182,8 +183,9 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         }
         
         manager = ModelManager(config_path=self.temp_config_path)
-        manager.download_model_files("testmodel:latest", mock_manifest)
+        result = manager.download_model_files("testmodel:latest", mock_manifest)
         
+        self.assertTrue(result)
         # Check if download_blob was called 3 times (1 config + 2 layers)
         self.assertEqual(mock_download_blob.call_count, 3)
         
@@ -191,6 +193,11 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         mock_download_blob.assert_any_call("testmodel:latest", "sha256:config123", 500, 'ollama_config')
         mock_download_blob.assert_any_call("testmodel:latest", "sha256:layer1", 1000, 'ollama_layer')
         mock_download_blob.assert_any_call("testmodel:latest", "sha256:layer2", 2000, 'ollama_layer')
+
+        # Test failure case
+        mock_download_blob.return_value = False
+        result_fail = manager.download_model_files("testmodel:latest", mock_manifest)
+        self.assertFalse(result_fail)
 
     @patch('shutil.disk_usage')
     @patch('os.makedirs')
@@ -236,6 +243,44 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
             
         self.assertTrue(result)
         mock_sleep.assert_called_once_with(10)
+
+    @patch('shutil.move')
+    @patch('os.path.exists')
+    @patch('os.makedirs')
+    def test_move_model_success(self, mock_makedirs, mock_exists, mock_move):
+        """Tests that move_model successfully moves files when all exist."""
+        # Always return True to simulate that all source files exist
+        mock_exists.return_value = True
+        
+        mock_manifest = {
+            "config": {"digest": "sha256:config123"},
+            "layers": [{"digest": "sha256:layer1"}]
+        }
+        
+        manager = ModelManager(config_path=self.temp_config_path)
+        manager.move_model("testmodel:latest", mock_manifest)
+        
+        # Should move 1 manifest + 1 config + 1 layer = 3 files
+        self.assertEqual(mock_move.call_count, 3)
+
+    @patch('shutil.move')
+    @patch('os.path.exists')
+    @patch('os.makedirs')
+    def test_move_model_missing_files(self, mock_makedirs, mock_exists, mock_move):
+        """Tests that move_model aborts if any file is missing."""
+        # Return False to simulate missing files
+        mock_exists.return_value = False
+        
+        mock_manifest = {
+            "config": {"digest": "sha256:config123"},
+            "layers": [{"digest": "sha256:layer1"}]
+        }
+        
+        manager = ModelManager(config_path=self.temp_config_path)
+        manager.move_model("testmodel:latest", mock_manifest)
+        
+        # Should not move anything
+        mock_move.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()
