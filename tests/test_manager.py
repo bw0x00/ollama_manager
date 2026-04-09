@@ -316,5 +316,30 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         manual_cmd_found = any("Manual Installation Commands" in str(arg) for arg in print_args)
         self.assertTrue(manual_cmd_found, "Manual installation commands were not printed.")
 
+    @patch('urllib.request.urlopen')
+    @patch('os.makedirs')
+    def test_path_traversal_prevention(self, mock_makedirs, mock_urlopen):
+        """Tests that malicious model names and tags are sanitized to prevent path traversal."""
+        mock_manifest_data = {"config": {"digest": "sha256:dummy", "size": 100}}
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(mock_manifest_data).encode('utf-8')
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        manager = ModelManager(config_path=self.temp_config_path)
+        
+        with patch('builtins.open', mock_open()) as mocked_file:
+            # Attempt path traversal in model name and tag
+            manager.download_manifest("../../../malicious_model:../latest")
+            
+            # Verify os.makedirs was called with sanitized paths, NOT the traversal paths
+            called_args = mock_makedirs.call_args[0][0]
+            self.assertNotIn("..", called_args)
+            self.assertTrue(called_args.endswith("malicious_model"))
+            
+            # Verify the file was opened with a sanitized path
+            file_open_args = mocked_file.call_args[0][0]
+            self.assertNotIn("..", file_open_args)
+            self.assertTrue(file_open_args.endswith(os.path.join("malicious_model", "latest")))
+
 if __name__ == '__main__':
     unittest.main()
