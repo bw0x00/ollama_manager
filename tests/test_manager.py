@@ -115,10 +115,15 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
             # Verify file was opened for writing
             mocked_file.assert_called_once()
 
+    @patch('shutil.disk_usage')
+    @patch('os.path.exists')
     @patch('urllib.request.urlopen')
     @patch('os.makedirs')
-    def test_download_blob_success(self, mock_makedirs, mock_urlopen):
+    def test_download_blob_success(self, mock_makedirs, mock_urlopen, mock_exists, mock_disk_usage):
         """Tests successful download, size verification, and hash verification of a blob."""
+        mock_disk_usage.return_value.free = 999999999
+        mock_exists.return_value = False
+        
         test_data = b"dummy layer data"
         expected_size = len(test_data)
         expected_digest = f"sha256:{hashlib.sha256(test_data).hexdigest()}"
@@ -134,13 +139,19 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
             result = manager.download_blob("testmodel", expected_digest, expected_size, "ollama_layer")
             
             self.assertTrue(result)
-            mocked_file.assert_called_once()
+            # open is called twice: once for writing ('ab'), once for reading ('rb') to verify hash
+            self.assertEqual(mocked_file.call_count, 2)
 
+    @patch('shutil.disk_usage')
+    @patch('os.path.exists')
     @patch('urllib.request.urlopen')
     @patch('os.makedirs')
     @patch('os.remove')
-    def test_download_blob_size_mismatch(self, mock_remove, mock_makedirs, mock_urlopen):
+    def test_download_blob_size_mismatch(self, mock_remove, mock_makedirs, mock_urlopen, mock_exists, mock_disk_usage):
         """Tests blob download failure due to size mismatch."""
+        mock_disk_usage.return_value.free = 999999999
+        mock_exists.return_value = False
+        
         test_data = b"dummy layer data"
         expected_size = 9999 # Intentionally wrong size
         expected_digest = f"sha256:{hashlib.sha256(test_data).hexdigest()}"
@@ -155,7 +166,8 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
             result = manager.download_blob("testmodel", expected_digest, expected_size, "ollama_layer")
             
             self.assertFalse(result)
-            mock_remove.assert_called_once()
+            # os.remove is not called for size mismatch in the updated logic, it just returns False
+            # so we don't assert mock_remove.assert_called_once() here anymore
 
     @patch('ollama_manager.manager.ModelManager.download_blob')
     @patch('os.makedirs')
@@ -179,6 +191,51 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         mock_download_blob.assert_any_call("testmodel:latest", "sha256:config123", 500, 'ollama_config')
         mock_download_blob.assert_any_call("testmodel:latest", "sha256:layer1", 1000, 'ollama_layer')
         mock_download_blob.assert_any_call("testmodel:latest", "sha256:layer2", 2000, 'ollama_layer')
+
+    @patch('shutil.disk_usage')
+    @patch('os.makedirs')
+    def test_download_blob_insufficient_space(self, mock_makedirs, mock_disk_usage):
+        """Tests that the process exits if there is not enough disk space."""
+        mock_disk_usage.return_value.free = 100 # Less than expected_size
+        
+        manager = ModelManager(config_path=self.temp_config_path)
+        
+        with self.assertRaises(SystemExit) as cm:
+            manager.download_blob("testmodel", "sha256:dummy", 1000, "ollama_layer")
+            
+        self.assertEqual(cm.exception.code, 1)
+
+    @patch('time.sleep')
+    @patch('shutil.disk_usage')
+    @patch('os.path.exists')
+    @patch('urllib.request.urlopen')
+    @patch('os.makedirs')
+    def test_download_blob_retry_logic(self, mock_makedirs, mock_urlopen, mock_exists, mock_disk_usage, mock_sleep):
+        """Tests that the download retries on timeout."""
+        mock_disk_usage.return_value.free = 999999999
+        mock_exists.return_value = False
+        
+        test_data = b"dummy layer data"
+        expected_size = len(test_data)
+        expected_digest = f"sha256:{hashlib.sha256(test_data).hexdigest()}"
+        
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [test_data, b""]
+        
+        import socket
+        # First call raises timeout, second call succeeds
+        mock_urlopen.side_effect = [
+            socket.timeout("Timeout"), 
+            MagicMock(__enter__=MagicMock(return_value=mock_response))
+        ]
+        
+        manager = ModelManager(config_path=self.temp_config_path)
+        
+        with patch('builtins.open', mock_open()):
+            result = manager.download_blob("testmodel", expected_digest, expected_size, "ollama_layer")
+            
+        self.assertTrue(result)
+        mock_sleep.assert_called_once_with(10)
 
 if __name__ == '__main__':
     unittest.main()
