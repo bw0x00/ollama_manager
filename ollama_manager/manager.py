@@ -178,6 +178,9 @@ class ModelManager:
         last_printed_mb = downloaded_size // (1024 * 1024)
         total_mb = expected_size // (1024 * 1024)
         
+        max_retries = 5
+        retry_count = 0
+        
         while downloaded_size < expected_size:
             try:
                 req = urllib.request.Request(url)
@@ -197,9 +200,26 @@ class ModelManager:
                         if current_mb - last_printed_mb >= 10: # Update more frequently since it overwrites
                             print(f"\r   {current_mb} MB of {total_mb} MB downloaded", end="", flush=True)
                             last_printed_mb = current_mb
+                
+                retry_count = 0 # Reset retries on successful chunk read
                             
+            except urllib.error.HTTPError as e:
+                if e.code in (400, 401, 403, 404):
+                    print(f"\n   ❌ Fatal HTTP error {e.code}: {e.reason}")
+                    return False
+                retry_count += 1
+                if retry_count > max_retries:
+                    print(f"\n   ❌ Max retries exceeded. Aborting.")
+                    return False
+                print(f"\n   ⚠️ Server error ({e.code}). Retrying {retry_count}/{max_retries} in 10 seconds...")
+                time.sleep(10)
+                continue
             except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as e:
-                print(f"\n   ⚠️ Download stalled or error ({e}). Retrying in 10 seconds...")
+                retry_count += 1
+                if retry_count > max_retries:
+                    print(f"\n   ❌ Max retries exceeded. Aborting.")
+                    return False
+                print(f"\n   ⚠️ Download stalled or error ({e}). Retrying {retry_count}/{max_retries} in 10 seconds...")
                 time.sleep(10)
                 continue
             except Exception as e:
