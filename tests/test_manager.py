@@ -319,7 +319,24 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
     @patch('urllib.request.urlopen')
     @patch('os.makedirs')
     def test_path_traversal_prevention(self, mock_makedirs, mock_urlopen):
-        """Tests that malicious model names and tags are sanitized to prevent path traversal."""
+        """Tests that malicious model names and tags are rejected to prevent path traversal."""
+        manager = ModelManager(config_path=self.temp_config_path)
+        
+        with patch('builtins.open', mock_open()) as mocked_file:
+            # Attempt path traversal in model name and tag
+            result = manager.download_manifest("../../../malicious_model:../latest")
+            
+            # Verify the request was rejected and returned an empty dict
+            self.assertEqual(result, {})
+            
+            # Verify os.makedirs and open were NOT called
+            mock_makedirs.assert_not_called()
+            mocked_file.assert_not_called()
+
+    @patch('urllib.request.urlopen')
+    @patch('os.makedirs')
+    def test_namespaced_model_allowed(self, mock_makedirs, mock_urlopen):
+        """Tests that valid namespaced models (e.g., containing '/') are allowed."""
         mock_manifest_data = {"config": {"digest": "sha256:dummy", "size": 100}}
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps(mock_manifest_data).encode('utf-8')
@@ -328,18 +345,12 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         manager = ModelManager(config_path=self.temp_config_path)
         
         with patch('builtins.open', mock_open()) as mocked_file:
-            # Attempt path traversal in model name and tag
-            manager.download_manifest("../../../malicious_model:../latest")
+            result = manager.download_manifest("namespace/model:latest")
             
-            # Verify os.makedirs was called with sanitized paths, NOT the traversal paths
-            called_args = mock_makedirs.call_args[0][0]
-            self.assertNotIn("..", called_args)
-            self.assertTrue(called_args.endswith("malicious_model"))
-            
-            # Verify the file was opened with a sanitized path
-            file_open_args = mocked_file.call_args[0][0]
-            self.assertNotIn("..", file_open_args)
-            self.assertTrue(file_open_args.endswith(os.path.join("malicious_model", "latest")))
+            # Verify the download proceeded successfully
+            self.assertEqual(result, mock_manifest_data)
+            mock_makedirs.assert_called()
+            mocked_file.assert_called()
 
 if __name__ == '__main__':
     unittest.main()
