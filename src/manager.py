@@ -123,6 +123,90 @@ class ModelManager:
             print(f"   ❌ Failed to parse manifest JSON.")
             return {}
 
+    def download_blob(self, model_name: str, digest: str, expected_size: int, url_template_key: str) -> bool:
+        """
+        Downloads a blob (config or layer), verifies its size and SHA256 digest,
+        and saves it to the blobs directory.
+        """
+        if ':' in model_name:
+            name, _ = model_name.split(':', 1)
+        else:
+            name = model_name
+
+        url_template = self.config.get(url_template_key)
+        if not url_template:
+            print(f"Error: '{url_template_key}' URL template not found.")
+            return False
+
+        # Replace placeholders. We replace both $config and $layer with the digest.
+        url = url_template.replace('$name', name).replace('$config', digest).replace('$layer', digest)
+        
+        # Determine save path
+        blobs_base = self.config.get('blobs', '').replace('~/.ollama/', '').lstrip('/')
+        save_dir = os.path.join("output", blobs_base)
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # Format filename: replace ':' with '-' (e.g., sha256:123 -> sha256-123)
+        filename = digest.replace(':', '-')
+        save_path = os.path.join(save_dir, filename)
+
+        print(f"Downloading blob {digest}...")
+        
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req) as response, open(save_path, 'wb') as out_file:
+                sha256_hash = hashlib.sha256()
+                downloaded_size = 0
+                
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
+                    out_file.write(chunk)
+                    sha256_hash.update(chunk)
+                    downloaded_size += len(chunk)
+            
+            actual_digest = f"sha256:{sha256_hash.hexdigest()}"
+            
+            if downloaded_size != expected_size:
+                print(f"   ❌ Size mismatch for {digest}: expected {expected_size}, got {downloaded_size}")
+                os.remove(save_path)
+                return False
+                
+            if actual_digest != digest:
+                print(f"   ❌ Digest mismatch for {digest}: expected {digest}, got {actual_digest}")
+                os.remove(save_path)
+                return False
+                
+            print(f"   ✅ Blob saved and verified: {save_path}")
+            return True
+            
+        except Exception as e:
+            print(f"   ❌ Failed to download blob {digest}: {e}")
+            if os.path.exists(save_path):
+                os.remove(save_path)
+            return False
+
+    def download_model_files(self, model_name: str, manifest: dict):
+        """
+        Extracts digests from the manifest and downloads the corresponding config and layer blobs.
+        """
+        # Download config
+        config_info = manifest.get('config', {})
+        config_digest = config_info.get('digest')
+        config_size = config_info.get('size')
+        
+        if config_digest and config_size is not None:
+            self.download_blob(model_name, config_digest, config_size, 'ollama_config')
+            
+        # Download layers
+        layers = manifest.get('layers', [])
+        for layer in layers:
+            layer_digest = layer.get('digest')
+            layer_size = layer.get('size')
+            if layer_digest and layer_size is not None:
+                self.download_blob(model_name, layer_digest, layer_size, 'ollama_layer')
+
     def download_model(self, model_name: str):
         """
         Handles the model download process.
