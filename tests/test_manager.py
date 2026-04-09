@@ -20,7 +20,7 @@ class TestModelManager(unittest.TestCase):
         # Mock the existence of the config file for testing purposes
         self.mock_config_content = """
 # Ollama Configuration
-manifests = ~/.ollama/models/manifests/registry.ollama.ai/library
+manifests = ~/.ollama/models/manifests/registry.ollag.ai/library
 blobs = ~/.ollama/models/blobs
 ollama_manifests = https://registry.ollama.ai/v2/library/$name/manifests/$tag
 ollama_config = https://registry.ollama.ai/v2/library/$name/blobs/$config
@@ -42,8 +42,8 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
             'manifests': '~/.ollama/models/manifests/registry.ollama.ai/library',
             'blobs': '~/.ollama/models/blobs',
             'ollama_manifests': 'https://registry.ollama.ai/v2/library/$name/manifests/$tag',
-            'ollama_config': 'https://registry.ollama.ai/v2/library/$name/blobs/$config',
-            'ollama_layer': 'https://registry.ollama.ai/v2/library/$name/blobs/$layer',
+            'ollama_config': 'https://registry.ollama.ai/v2/api/library/$name/blobs/$config',
+            'ollama_layer': 'https://registry.ollama.ai/v2/api/library/$name/blobs/$layer',
         }
         mock_load_config.return_value = expected_config
         
@@ -101,7 +101,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
     @patch('os.makedirs')
     def test_download_manifest_success(self, mock_makedirs, mock_urlopen):
         """Tests successful download and parsing of a manifest."""
-        mock_manifest_data = {"config": {"digest": "sha256:dummy", "size": 100}}
+        mock_manifest_data = {"config": {"digest": "sha25					2", "size": 100}}
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps(mock_manifest_data).encode('utf-8')
         mock_urlopen.return_value.__enter__.return_value = mock_response
@@ -322,14 +322,17 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         """Tests that malicious model names and tags are rejected to prevent path traversal."""
         manager = ModelManager(config_path=self.temp_config_path)
         
+        # Reset mock to clear calls made during __init__
+        mock_makedirs.reset_mock()
+    
         with patch('builtins.open', mock_open()) as mocked_file:
             # Attempt path traversal in model name and tag
             result = manager.download_manifest("../../../malicious_model:../latest")
-            
+    
             # Verify the request was rejected and returned an empty dict
             self.assertEqual(result, {})
-            
-            # Verify os.makedirs and open were NOT called
+    
+            # Verify os.makedirs and open were NOT called during the download attempt
             mock_makedirs.assert_not_called()
             mocked_file.assert_not_called()
 
