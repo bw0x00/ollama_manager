@@ -3,6 +3,8 @@ import os
 import tempfile
 from unittest.mock import patch, mock_open, MagicMock
 import unittest.mock
+import json
+import hashlib
 
 # Assuming src/manager.py is importable or we adjust the path for testing
 # For this test file, we assume we can import the class directly.
@@ -92,6 +94,88 @@ ollama_manifests = https://registry.ollama.ai/v2/library/$name/manifests/$tag
     
         # Assert that os.makedirs was called exactly twice with the correct paths
         mock_makedirs.assert_has_calls(expected_calls, any_order=True)
+
+    @patch('urllib.request.urlopen')
+    @patch('os.makedirs')
+    def test_download_manifest_success(self, mock_makedirs, mock_urlopen):
+        """Tests successful download and parsing of a manifest."""
+        mock_manifest_data = {"config": {"digest": "sha256:dummy", "size": 100}}
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps(mock_manifest_data).encode('utf-8')
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        manager = ModelManager(config_path=self.temp_config_path)
+        
+        with patch('builtins.open', mock_open()) as mocked_file:
+            manifest = manager.download_manifest("testmodel:latest")
+            
+            self.assertEqual(manifest, mock_manifest_data)
+            # Verify file was opened for writing
+            mocked_file.assert_called_once()
+
+    @patch('urllib.request.urlopen')
+    @patch('os.makedirs')
+    def test_download_blob_success(self, mock_makedirs, mock_urlopen):
+        """Tests successful download, size verification, and hash verification of a blob."""
+        test_data = b"dummy layer data"
+        expected_size = len(test_data)
+        expected_digest = f"sha256:{hashlib.sha256(test_data).hexdigest()}"
+
+        mock_response = MagicMock()
+        # Return data on first read, empty bytes on second read to simulate EOF
+        mock_response.read.side_effect = [test_data, b""] 
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        manager = ModelManager(config_path=self.temp_config_path)
+        
+        with patch('builtins.open', mock_open()) as mocked_file:
+            result = manager.download_blob("testmodel", expected_digest, expected_size, "ollama_layer")
+            
+            self.assertTrue(result)
+            mocked_file.assert_called_once()
+
+    @patch('urllib.request.urlopen')
+    @patch('os.makedirs')
+    @patch('os.remove')
+    def test_download_blob_size_mismatch(self, mock_remove, mock_makedirs, mock_urlopen):
+        """Tests blob download failure due to size mismatch."""
+        test_data = b"dummy layer data"
+        expected_size = 9999 # Intentionally wrong size
+        expected_digest = f"sha256:{hashlib.sha256(test_data).hexdigest()}"
+
+        mock_response = MagicMock()
+        mock_response.read.side_effect = [test_data, b""] 
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        manager = ModelManager(config_path=self.temp_config_path)
+        
+        with patch('builtins.open', mock_open()):
+            result = manager.download_blob("testmodel", expected_digest, expected_size, "ollama_layer")
+            
+            self.assertFalse(result)
+            mock_remove.assert_called_once()
+
+    @patch('src.manager.ModelManager.download_blob')
+    def test_download_model_files(self, mock_download_blob):
+        """Tests that download_model_files correctly extracts digests and calls download_blob."""
+        mock_manifest = {
+            "config": {"digest": "sha256:config123", "size": 500},
+            "layers": [
+                {"digest": "sha256:layer1", "size": 1000},
+                {"digest": "sha256:layer2", "size": 2000}
+            ]
+        }
+        
+        manager = ModelManager(config_path=self.temp_config_path)
+        manager.download_model_files("testmodel:latest", mock_manifest)
+        
+        # Check if download_blob was called 3 times (1 config + 2 layers)
+        self.assertEqual(mock_download_blob.call_count, 3)
+        
+        # Verify specific calls
+        mock_download_blob.assert_any_call("testmodel:latest", "sha256:config123", 500, 'ollama_config')
+        mock_download_blob.assert_any_call("testmodel:latest", "sha256:layer1", 1000, 'ollama_layer')
+        mock_download_blob.assert_any_call("testmodel:latest", "sha256:layer2", 2000, 'ollama_layer')
 
 if __name__ == '__main__':
     unittest.main()
