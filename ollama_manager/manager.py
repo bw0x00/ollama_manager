@@ -79,6 +79,16 @@ class ModelManager:
                 except OSError as e:
                     print(f"Error creating directory {target_dir}: {e}")
 
+    def _is_safe_path_component(self, component: str) -> bool:
+        """Validates that a path component doesn't contain traversal sequences or absolute paths."""
+        if not component:
+            return False
+        if '..' in component:
+            return False
+        if component.startswith('/') or component.startswith('\\'):
+            return False
+        return True
+
     def download_manifest(self, model_name: str) -> dict:
         """
         Downloads the manifest file for a given model name.
@@ -91,8 +101,9 @@ class ModelManager:
             name = model_name
             tag = "latest"
             
-        name = os.path.basename(name)
-        tag = os.path.basename(tag)
+        if not self._is_safe_path_component(name) or not self._is_safe_path_component(tag):
+            print(f"Error: Invalid model name or tag '{model_name}'.")
+            return {}
 
         # Construct the URL
         url_template = self.config.get('ollama_manifests')
@@ -141,7 +152,10 @@ class ModelManager:
         else:
             name = model_name
             
-        name = os.path.basename(name)
+        if not self._is_safe_path_component(name):
+            print(f"Error: Invalid model name '{model_name}'.")
+            return False
+            
         safe_digest = os.path.basename(digest)
 
         url_template = self.config.get(url_template_key)
@@ -298,8 +312,9 @@ class ModelManager:
             name = model_name
             tag = "latest"
             
-        name = os.path.basename(name)
-        tag = os.path.basename(tag)
+        if not self._is_safe_path_component(name) or not self._is_safe_path_component(tag):
+            print(f"Error: Invalid model name or tag '{model_name}'.")
+            return
 
         # Paths setup
         manifest_target_base = os.path.expanduser(self.config.get('manifests', ''))
@@ -391,9 +406,6 @@ class ModelManager:
                     name, tag = model_name.split(':', 1)
                 else:
                     name, tag = model_name, "latest"
-                    
-                name = os.path.basename(name)
-                tag = os.path.basename(tag)
 
                 # Manifest move command
                 manifest_source_base = self.config.get('manifests', '').replace('~/.ollama/', '').lstrip('/')
