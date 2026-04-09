@@ -35,7 +35,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         # Clean up the temporary directory
         self.temp_dir.cleanup()
 
-    @patch('src.manager.ModelManager._load_config')
+    @patch('ollama_manager.manager.ModelManager._load_config')
     def test_load_config_success(self, mock_load_config):
         """Tests successful loading of configuration data."""
         expected_config = {
@@ -50,7 +50,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         manager = ModelManager(config_path=self.temp_config_path)
         self.assertEqual(manager.config, expected_config)
 
-    @patch('src.manager.ModelManager._load_config')
+    @patch('ollama_manager.manager.ModelManager._load_config')
     @patch('os.makedirs')
     def test_ensure_output_directories_creation(self, mock_makedirs, mock_load_config):
         """Tests that necessary directories are created in the correct structure."""
