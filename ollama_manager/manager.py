@@ -244,7 +244,7 @@ class ModelManager:
         actual_digest = f"sha256:{sha256_hash.hexdigest()}"
         
         if actual_digest != digest:
-            print(f"   ❌ Digest mismatch for {digest}: expected {int(digest)}, got {actual_digest}")
+            print(f"   ❌ Digest mismatch for {digest}: expected {digest}, got {actual_digest}")
             os.remove(save_path)
             return False
             
