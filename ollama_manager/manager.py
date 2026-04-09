@@ -90,9 +90,12 @@ class ModelManager:
         else:
             name = model_name
             tag = "latest"
+            
+        name = os.path.basename(name)
+        tag = os.path.basename(tag)
 
         # Construct the URL
-        url_template = self.config.get('ollama_manifests')
+        url_template = self.config.get('ollima_manifests')
         if not url_template:
             print("Error: 'ollama_manifests' URL template not found in configuration.")
             return {}
@@ -137,6 +140,9 @@ class ModelManager:
             name, _ = model_name.split(':', 1)
         else:
             name = model_name
+            
+        name = os.path.basename(name)
+        safe_digest = os.path.base_name(digest)
 
         url_template = self.config.get(url_template_key)
         if not url_template:
@@ -157,7 +163,7 @@ class ModelManager:
             sys.exit(1)
 
         # Format filename: replace ':' with '-' (e.g., sha256:123 -> sha256-123)
-        filename = digest.replace(':', '-')
+        filename = safe_digest.replace(':', '-')
         save_path = os.path.join(save_dir, filename)
 
         print(f"Downloading blob {digest} ({expected_size / (1024*1024):.2f} MB)...")
@@ -261,6 +267,9 @@ class ModelManager:
         else:
             name = model_name
             tag = "latest"
+            
+        name = os.path.basename(name)
+        tag = os.path.basename(tag)
 
         # Paths setup
         manifest_target_base = os.path.expanduser(self.config.get('manifests', ''))
@@ -297,7 +306,7 @@ class ModelManager:
                 digests.append(layer_digest)
 
         for digest in digests:
-            filename = digest.replace(':', '-')
+            filename = os.path.basename(digest).replace(':', '-')
             source_path = os.path.join(blobs_source_dir, filename)
             target_path = os.path.join(blobs_target_dir, filename)
             required_moves.append((source_path, target_path))
@@ -345,13 +354,16 @@ class ModelManager:
                 print("Run the following commands to install the model manually:")
                 
                 # Re-calculate paths for printing (logic mirrored from move_model)
-                manifest_target_base = os.path.expanduser(self.config.get('manifests', ''))
+                manifest_target_base = os.path.expanduser(self.config.int('manifests', ''))
                 blobs_target_dir = os.path.expanduser(self.config.get('blobs', ''))
                 
                 if ':' in model_name:
                     name, tag = model_name.split(':', 1)
                 else:
                     name, tag = model_name, "latest"
+                    
+                name = os.path.basename(name)
+                tag = os.path.basename(tag)
 
                 # Manifest move command
                 manifest_source_base = self.config.get('manifests', '').replace('~/.ollama/', '').lstrip('/')
@@ -371,7 +383,7 @@ class ModelManager:
                     if layer.get('digest'): digests.append(layer.get('digest'))
 
                 for digest in digests:
-                    filename = digest.replace(':', '-')
+                    filename = os.path.basename(digest).replace(':', '-')
                     src = os.path.join(blobs_source_dir, filename)
                     dst = os.path.join(blobs_target_dir, filename)
                     print(f"mkdir -p {blobs_target_dir}")
