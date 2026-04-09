@@ -12,8 +12,9 @@ class ModelManager:
     Manages the process of downloading and interacting with Ollama models.
     Reads configuration from config/ollama.conf.
     """
-    def __init__(self, config_path: str = "config/ollama.conf"):
+    def __init__(self, config_path: str = "config/ollama.conf", output_dir: str = "output"):
         self.config_path = config_path
+        self.output_dir = output_dir
         self.config = self._load_config()
         self._ensure_output_directories()
 
@@ -66,7 +67,7 @@ class ModelManager:
                 # Using os.path.join to ensure cross-platform compatibility, 
                 # but we need to handle the leading slash if cleaned_path has one.
                 cleaned_path = cleaned_path.lstrip('/')
-                target_dir = os.path.join("output", cleaned_path)
+                target_dir = os.path.join(self.output_dir, cleaned_path)
                 
                 # Create the directory if it doesn't exist
                 try:
@@ -97,7 +98,7 @@ class ModelManager:
 
         # Determine the save path based on the config
         manifest_base = self.config.get('manifests', '').replace('~/.ollama/', '').lstrip('/')
-        save_dir = os.path.join("output", manifest_base, name)
+        save_dir = os.path.join(self.output_dir, manifest_base, name)
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, tag)
 
@@ -143,28 +144,35 @@ class ModelManager:
         
         # Determine save path
         blobs_base = self.config.get('blobs', '').replace('~/.ollama/', '').lstrip('/')
-        save_dir = os.path.join("output", blobs_base)
+        save_dir = os.path.join(self.output_dir, blobs_base)
         os.makedirs(save_dir, exist_ok=True)
         
         # Format filename: replace ':' with '-' (e.g., sha256:123 -> sha256-123)
         filename = digest.replace(':', '-')
         save_path = os.path.join(save_dir, filename)
 
-        print(f"Downloading blob {digest}...")
+        print(f"Downloading blob {digest} ({expected_size / (1024*1024):.2f} MB)...")
         
         try:
             req = urllib.request.Request(url)
             with urllib.request.urlopen(req) as response, open(save_path, 'wb') as out_file:
                 sha256_hash = hashlib.sha256()
                 downloaded_size = 0
+                last_printed_mb = 0
                 
                 while True:
-                    chunk = response.read(8192)
+                    chunk = response.read(8192 * 4) # Increased chunk size for better performance
                     if not chunk:
                         break
                     out_file.write(chunk)
                     sha256_hash.update(chunk)
                     downloaded_size += len(chunk)
+                    
+                    # Print progress every ~50MB
+                    current_mb = downloaded_size // (1024 * 1024)
+                    if current_mb - last_printed_mb >= 50:
+                        print(f"   ... downloaded {current_mb} MB")
+                        last_printed_mb = current_mb
             
             actual_digest = f"sha256:{sha256_hash.hexdigest()}"
             
