@@ -156,7 +156,8 @@ ollama_manifests = https://registry.ollama.ai/v2/library/$name/manifests/$tag
             mock_remove.assert_called_once()
 
     @patch('src.manager.ModelManager.download_blob')
-    def test_download_model_files(self, mock_download_blob):
+    @patch('os.makedirs')
+    def test_download_model_files(self, mock_makedirs, mock_download_blob):
         """Tests that download_model_files correctly extracts digests and calls download_blob."""
         mock_manifest = {
             "config": {"digest": "sha256:config123", "size": 500},
