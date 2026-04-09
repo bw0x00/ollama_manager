@@ -23,6 +23,8 @@ class TestModelManager(unittest.TestCase):
 manifests = ~/.ollama/models/manifests/registry.ollama.ai/library
 blobs = ~/.ollama/models/blobs
 ollama_manifests = https://registry.ollama.ai/v2/library/$name/manifests/$tag
+ollama_config = https://registry.ollama.ai/v2/library/$name/blobs/$config
+ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
 """
         
         # Write mock content to the temporary config file
