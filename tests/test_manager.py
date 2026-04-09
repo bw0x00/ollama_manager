@@ -122,7 +122,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
     def test_download_blob_success(self, mock_makedirs, mock_urlopen, mock_exists, mock_disk_usage):
         """Tests successful download, size verification, and hash verification of a blob."""
         mock_disk_usage.return_value.free = 999999999
-        mock_exists.return_value = False
+        mock_exists.side_effect = lambda path: path == self.temp_config_path
         
         test_data = b"dummy layer data"
         expected_size = len(test_data)
@@ -135,7 +135,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
 
         manager = ModelManager(config_path=self.temp_config_path)
         
-        with patch('builtins.open', mock_open()) as mocked_file:
+        with patch('builtins.open', mock_open(read_data=test_data)) as mocked_file:
             result = manager.download_blob("testmodel", expected_digest, expected_size, "ollama_layer")
             
             self.assertTrue(result)
@@ -150,7 +150,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
     def test_download_blob_size_mismatch(self, mock_remove, mock_makedirs, mock_urlopen, mock_exists, mock_disk_usage):
         """Tests blob download failure due to size mismatch."""
         mock_disk_usage.return_value.free = 999999999
-        mock_exists.return_value = False
+        mock_exists.side_effect = lambda path: path == self.temp_config_path
         
         test_data = b"dummy layer data"
         expected_size = 5 # Intentionally wrong size (smaller than test_data to exit the while loop)
@@ -213,7 +213,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
     def test_download_blob_retry_logic(self, mock_makedirs, mock_urlopen, mock_exists, mock_disk_usage, mock_sleep):
         """Tests that the download retries on timeout."""
         mock_disk_usage.return_value.free = 999999999
-        mock_exists.return_value = False
+        mock_exists.side_effect = lambda path: path == self.temp_config_path
         
         test_data = b"dummy layer data"
         expected_size = len(test_data)
@@ -231,7 +231,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         
         manager = ModelManager(config_path=self.temp_config_path)
         
-        with patch('builtins.open', mock_open()):
+        with patch('builtins.open', mock_open(read_data=test_data)):
             result = manager.download_blob("testmodel", expected_digest, expected_size, "ollama_layer")
             
         self.assertTrue(result)
