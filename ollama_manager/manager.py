@@ -95,7 +95,7 @@ class ModelManager:
         tag = os.path.basename(tag)
 
         # Construct the URL
-        url_template = self.config.get('ollima_manifests')
+        url_template = self.config.get('ollama_manifests')
         if not url_template:
             print("Error: 'ollama_manifests' URL template not found in configuration.")
             return {}
@@ -142,7 +142,7 @@ class ModelManager:
             name = model_name
             
         name = os.path.basename(name)
-        safe_digest = os.path.base_name(digest)
+        safe_digest = os.path.basename(digest)
 
         url_template = self.config.get(url_template_key)
         if not url_template:
@@ -354,7 +354,7 @@ class ModelManager:
                 print("Run the following commands to install the model manually:")
                 
                 # Re-calculate paths for printing (logic mirrored from move_model)
-                manifest_target_base = os.path.expanduser(self.config.int('manifests', ''))
+                manifest_target_base = os.path.expanduser(self.config.get('manifests', ''))
                 blobs_target_dir = os.path.expanduser(self.config.get('blobs', ''))
                 
                 if ':' in model_name:
