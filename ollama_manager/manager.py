@@ -170,6 +170,7 @@ class ModelManager:
                 downloaded_size = 0
 
         last_printed_mb = downloaded_size // (1024 * 1024)
+        total_mb = expected_size // (1024 * 1024)
         
         while downloaded_size < expected_size:
             try:
@@ -187,17 +188,19 @@ class ModelManager:
                         downloaded_size += len(chunk)
                         
                         current_mb = downloaded_size // (1024 * 1024)
-                        if current_mb - last_printed_mb >= 50:
-                            print(f"   ... downloaded {current_mb} MB")
+                        if current_mb - last_printed_mb >= 10: # Update more frequently since it overwrites
+                            print(f"\r   {current_mb} MB of {total_mb} MB downloaded", end="", flush=True)
                             last_printed_mb = current_mb
                             
             except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as e:
-                print(f"   ⚠️ Download stalled or error ({e}). Retrying in 10 seconds...")
+                print(f"\n   ⚠️ Download stalled or error ({e}). Retrying in 10 seconds...")
                 time.sleep(10)
                 continue
             except Exception as e:
-                print(f"   ❌ Unexpected error: {e}")
+                print(f"\n   ❌ Unexpected error: {e}")
                 return False
+
+        print() # Add a newline after the progress bar completes
 
         if downloaded_size != expected_size:
             print(f"   ❌ Size mismatch for {digest}: expected {expected_size}, got {downloaded_size}")
