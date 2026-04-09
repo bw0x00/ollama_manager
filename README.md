@@ -31,7 +31,6 @@ ollama_manifests = https://registry.ollama.ai/v2/library/$name/manifests/$tag
 ollama_config = https://registry.ollama.ai/v2/library/$name/blobs/$config
 ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
 ```
-*Note: The tool automatically strips the `~/.ollama/` prefix and places the files inside the local `output/` directory.*
 
 ## 💻 Usage
 
