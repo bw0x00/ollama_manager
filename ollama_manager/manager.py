@@ -225,17 +225,19 @@ class ModelManager:
         print(f"   ✅ Blob saved and verified: {save_path}")
         return True
 
-    def download_model_files(self, model_name: str, manifest: dict):
+    def download_model_files(self, model_name: str, manifest: dict) -> bool:
         """
         Extracts digests from the manifest and downloads the corresponding config and layer blobs.
         """
+        success = True
         # Download config
         config_info = manifest.get('config', {})
         config_digest = config_info.get('digest')
         config_size = config_info.get('size')
         
         if config_digest and config_size is not None:
-            self.download_blob(model_name, config_digest, config_size, 'ollama_config')
+            if not self.download_blob(model_name, config_digest, config_size, 'ollama_config'):
+                success = False
             
         # Download layers
         layers = manifest.get('layers', [])
@@ -243,7 +245,80 @@ class ModelManager:
             layer_digest = layer.get('digest')
             layer_size = layer.get('size')
             if layer_digest and layer_size is not None:
-                self.download_blob(model_name, layer_digest, layer_size, 'ollama_layer')
+                if not self.download_blob(model_name, layer_digest, layer_size, 'ollama_layer'):
+                    success = False
+                    
+        return success
+
+    def move_model(self, model_name: str, manifest: dict):
+        """
+        Moves the downloaded manifest and blobs to the target directories defined in the config.
+        Verifies all files exist before moving anything.
+        """
+        print(f"--- Installing Model {model_name} ---")
+        if ':' in model_name:
+            name, tag = model_name.split(':', 1)
+        else:
+            name = model_name
+            tag = "latest"
+
+        # Paths setup
+        manifest_target_base = os.path.expanduser(self.config.get('manifests', ''))
+        blobs_target_dir = os.path.expanduser(self.config.get('blobs', ''))
+
+        if not manifest_target_base or not blobs_target_dir:
+            print("Error: 'manifests' or 'blobs' path not defined in config.")
+            return
+
+        manifest_target_dir = os.path.join(manifest_target_base, name)
+        manifest_target_path = os.path.join(manifest_target_dir, tag)
+
+        manifest_source_base = self.config.get('manifests', '').replace('~/.ollama/', '').lstrip('/')
+        manifest_source_path = os.path.join(self.output_dir, manifest_source_base, name, tag)
+
+        blobs_source_base = self.config.get('blobs', '').replace('~/.ollama/', '').lstrip('/')
+        blobs_source_dir = os.path.join(self.output_dir, blobs_source_base)
+
+        # Collect all required files
+        required_moves = [] # list of tuples: (source_path, target_path)
+        
+        # 1. Manifest
+        required_moves.append((manifest_source_path, manifest_target_path))
+
+        # 2. Blobs
+        digests = []
+        config_digest = manifest.get('config', {}).get('digest')
+        if config_digest:
+            digests.append(config_digest)
+        
+        for layer in manifest.get('layers', []):
+            layer_digest = layer.get('digest')
+            if layer_digest:
+                digests.append(layer_digest)
+
+        for digest in digests:
+            filename = digest.replace(':', '-')
+            source_path = os.path.join(blobs_source_dir, filename)
+            target_path = os.path.join(blobs_target_dir, filename)
+            required_moves.append((source_path, target_path))
+
+        # Verify all source files exist
+        missing_files = [src for src, _ in required_moves if not os.path.exists(src)]
+        if missing_files:
+            print("   ❌ Cannot install model. The following downloaded files are missing:")
+            for missing in missing_files:
+                print(f"      - {missing}")
+            return
+
+        # Move files
+        os.makedirs(manifest_target_dir, exist_ok=True)
+        os.makedirs(blobs_target_dir, exist_ok=True)
+
+        for src, dst in required_moves:
+            shutil.move(src, dst)
+            print(f"   ✅ Moved to {dst}")
+        
+        print("Model installation completed successfully.")
 
     def download_model(self, model_name: str):
         """
@@ -258,8 +333,11 @@ class ModelManager:
             return
             
         print("Manifest downloaded successfully. Downloading blobs...")
-        self.download_model_files(model_name, manifest)
-        print("Download process completed.")
+        if self.download_model_files(model_name, manifest):
+            print("Download process completed successfully.")
+            self.move_model(model_name, manifest)
+        else:
+            print("Download process failed for one or more files. Skipping installation.")
 
 def main():
     """
