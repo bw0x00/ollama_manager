@@ -218,7 +218,7 @@ class ModelManager:
         actual_digest = f"sha256:{sha256_hash.hexdigest()}"
         
         if actual_digest != digest:
-            print(f"   ❌ Digest mismatch for {digest}: expected {digest}, got {actual_digest}")
+            print(f"   ❌ Digest mismatch for {digest}: expected {int(digest)}, got {actual_digest}")
             os.remove(save_path)
             return False
             
@@ -276,7 +276,7 @@ class ModelManager:
         manifest_source_base = self.config.get('manifests', '').replace('~/.ollama/', '').lstrip('/')
         manifest_source_path = os.path.join(self.output_dir, manifest_source_base, name, tag)
 
-        blobs_source_base = self.config.get('blobs', '').replace('~/.ollama/', '').lstrip('/')
+        blobs_source_base = self.cap_config_blobs_base()
         blobs_source_dir = os.path.join(self.output_dir, blobs_source_base)
 
         # Collect all required files
@@ -320,7 +320,10 @@ class ModelManager:
         
         print("Model installation completed successfully.")
 
-    def download_model(self, model_name: str):
+    def cap_config_blobs_base(self):
+        return self.config.get('blobs', '').replace('~/.ollama/', '').lstrip('/')
+
+    def download_model(self, model_name: str, install: bool = False):
         """
         Handles the model download process.
         """
@@ -335,7 +338,45 @@ class ModelManager:
         print("Manifest downloaded successfully. Downloading blobs...")
         if self.download_model_files(model_name, manifest):
             print("Download process completed successfully.")
-            self.move_model(model_name, manifest)
+            if install:
+                self.move_model(model_name, manifest)
+            else:
+                print("\n--- Manual Installation Commands ---")
+                print("Run the following commands to install the model manually:")
+                
+                # Re-calculate paths for printing (logic mirrored from move_model)
+                manifest_target_base = os.path.expanduser(self.config.get('manifests', ''))
+                blobs_target_dir = os.path.expanduser(self.config.get('blobs', ''))
+                
+                if ':' in model_name:
+                    name, tag = model_name.split(':', 1)
+                else:
+                    name, tag = model_name, "latest"
+
+                # Manifest move command
+                manifest_source_base = self.config.get('manifests', '').replace('~/.ollama/', '').lstrip('/')
+                manifest_source_path = os.path.join(self.output_dir, manifest_source_base, name, tag)
+                manifest_target_path = os.path.join(manifest_target_base, name, tag)
+                print(f"mkdir -p {os.path.dirname(manifest_target_path)}")
+                print(f"mv {manifest_source_path} {manifest_target_path}")
+
+                # Blobs move commands
+                blobs_source_base = self.cap_config_blobs_base()
+                blobs_source_dir = os.path.join(self.output_dir, blobs_source_base)
+                
+                digests = []
+                config_digest = manifest.get('config', {}).get('digest')
+                if config_digest: digests.append(config_digest)
+                for layer in manifest.get('layers', []):
+                    if layer.get('digest'): digests.append(layer.get('digest'))
+
+                for digest in digests:
+                    filename = digest.replace(':', '-')
+                    src = os.path.join(blobs_source_dir, filename)
+                    dst = os.path.join(blobs_target_dir, filename)
+                    print(f"mkdir -p {blobs_target_dir}")
+                    print(f"mv {src} {dst}")
+                print("------------------------------------")
         else:
             print("Download process failed for one or more files. Skipping installation.")
 
@@ -352,6 +393,11 @@ def main():
         type=str, 
         help="The name of the model to download (e.g., llama3:8b)."
     )
+    parser.add_argument(
+        "--install",
+        action="store_true",
+        help="Automatically move downloaded files to the destination folders."
+    )
     
     args = parser.parse_args()
 
@@ -359,7 +405,7 @@ def main():
 
     try:
         if args.download:
-            manager.download_model(args.download)
+            manager.download_model(args.download, install=args.install)
         else:
             parser.print_help()
     except KeyboardInterrupt:
