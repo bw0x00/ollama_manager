@@ -4,6 +4,7 @@ import os
 import urllib.request
 import urllib.error
 import json
+import hashlib
 from typing import Dict
 
 class ModelManager:
@@ -134,7 +135,9 @@ class ModelManager:
             print("Aborting download process due to missing manifest.")
             return
             
-        print("Manifest downloaded successfully. Ready for next steps.")
+        print("Manifest downloaded successfully. Downloading blobs...")
+        self.download_model_files(model_name, manifest)
+        print("Download process completed.")
 
 def main():
     """
