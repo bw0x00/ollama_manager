@@ -188,18 +188,28 @@ class ModelManager:
                     req.add_header('Range', f'bytes={downloaded_size}-')
                     
                 # Use a timeout to detect stalled downloads
-                with urllib.request.urlopen(req, timeout=15) as response, open(save_path, 'ab') as out_file:
-                    while True:
-                        chunk = response.read(8192 * 4)
-                        if not chunk:
-                            break
-                        out_file.write(chunk)
-                        downloaded_size += len(chunk)
-                        
-                        current_mb = downloaded_size // (1024 * 1024)
-                        if current_mb - last_printed_mb >= 10: # Update more frequently since it overwrites
-                            print(f"\r   {current_mb} MB of {total_mb} MB downloaded", end="", flush=True)
-                            last_printed_mb = current_mb
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    # If we requested a range but the server returned the full file (200 OK), we must start over
+                    if downloaded_size > 0 and response.getcode() != 206:
+                        print("\n   ⚠️ Server does not support resume. Restarting download...")
+                        downloaded_size = 0
+                        # Truncate the file by opening in 'wb' mode
+                        with open(save_path, 'wb') as f:
+                            pass
+                        continue
+
+                    with open(save_path, 'ab') as out_file:
+                        while True:
+                            chunk = response.read(8192 * 4)
+                            if not chunk:
+                                break
+                            out_file.write(chunk)
+                            downloaded_size += len(chunk)
+                            
+                            current_mb = downloaded_size // (1024 * 1024)
+                            if current_mb - last_printed_mb >= 10: # Update more frequently since it overwrites
+                                print(f"\r   {current_mb} MB of {total_mb} MB downloaded", end="", flush=True)
+                                last_printed_mb = current_mb
                 
                 retry_count = 0 # Reset retries on successful chunk read
                             
