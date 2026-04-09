@@ -11,6 +11,7 @@ class ModelManager:
     def __init__(self, config_path: str = "config/ollama.conf"):
         self.config_path = config_path
         self.config = self._load_config()
+        self._ensure_output_directories()
 
     def _load_config(self) -> Dict[str, str]:
         """
@@ -39,6 +40,35 @@ class ModelManager:
             return {}
             
         return config_data
+
+    def _ensure_output_directories(self):
+        """
+        Checks and creates necessary directory structures within the 'output/' folder
+        based on paths defined in the configuration (manifests and blobs).
+        """
+        paths_to_check = ["manifests", "blobs"]
+        
+        for key in paths_to_check:
+            if key in self.config:
+                raw_path = self.config[key]
+                
+                # Strip the leading "~/.ollama/" segment
+                if raw_path.startswith("~/.ollama/"):
+                    cleaned_path = raw_path[len("~/.ollama/"):]
+                else:
+                    cleaned_path = raw_path
+                
+                # Construct the final path relative to the 'output/' directory
+                # Using os.path.join to ensure cross-platform compatibility, 
+                # but we need to handle the leading slash if cleaned_path has one.
+                cleaned_path = cleaned_path.lstrip('/')
+                target_dir = os.path.join("output", cleaned_path)
+                
+                # Create the directory if it doesn't exist
+                try:
+                    os.makedirs(target_dir, exist_ok=True)
+                except OSError as e:
+                    print(f"Error creating directory {target_dir}: {e}")
 
     def download_model(self, model_name: str):
         """
