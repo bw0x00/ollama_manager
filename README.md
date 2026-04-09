@@ -10,7 +10,7 @@ This tool is a comprehensive CLI downloader and manager for AI models intended f
 - **Zero Dependencies:** Built entirely using Python's standard library (`urllib`, `hashlib`, `json`, `argparse`). No `pip install` required!
 
 ## 📂 Project Structure
-- `src/`: Contains the core Python source code (`manager.py`).
+- `ollama_manager/`: Contains the core Python source code (`manager.py`).
 - `tests/`: Houses all unit tests (`test_manager.py`).
 - `docs/`: Contains additional documentation files.
 - `config/`: Stores configuration files (`ollama.conf`).
@@ -36,11 +36,11 @@ Run the manager from the root of the repository using Python:
 
 ```bash
 # View help and available arguments
-python3 -m src.manager --help
+python3 -m ollama_manager.manager --help
 
 # Download a specific model (defaults to 'latest' tag if omitted)
-python3 -m src.manager --download gemma:2b
-python3 -m src.manager --download llama3
+python3 -m ollama_manager.manager --download gemma:2b
+python3 -m ollama_manager.manager --download llama3
 ```
 
 During the download, the tool will display progress and verify each blob:

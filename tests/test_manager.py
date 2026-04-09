@@ -74,7 +74,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
         mock_makedirs.assert_has_calls(expected_calls, any_order=True)
         self.assertEqual(mock_makedirs.call_count, 2)
 
-    @patch('src.manager.ModelManager._load_config')
+    @patch('ollama_manager.manager.ModelManager._load_config')
     @patch('os.makedirs')
     def test_initialization_calls_setup(self, mock_makedirs, mock_load_config):
         """Tests that necessary directories are created upon initialization."""
@@ -157,7 +157,7 @@ ollama_layer = https://registry.ollama.ai/v2/library/$name/blobs/$layer
             self.assertFalse(result)
             mock_remove.assert_called_once()
 
-    @patch('src.manager.ModelManager.download_blob')
+    @patch('ollama_manager.manager.ModelManager.download_blob')
     @patch('os.makedirs')
     def test_download_model_files(self, mock_makedirs, mock_download_blob):
         """Tests that download_model_files correctly extracts digests and calls download_blob."""
