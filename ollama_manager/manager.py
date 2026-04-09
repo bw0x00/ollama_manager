@@ -5,6 +5,10 @@ import urllib.request
 import urllib.error
 import json
 import hashlib
+import time
+import socket
+import shutil
+import sys
 from typing import Dict
 
 class ModelManager:
@@ -147,53 +151,76 @@ class ModelManager:
         save_dir = os.path.join(self.output_dir, blobs_base)
         os.makedirs(save_dir, exist_ok=True)
         
+        free_space = shutil.disk_usage(save_dir).free
+        if free_space < expected_size:
+            print(f"   ❌ Error: Not enough free disk space. Required: {expected_size / (1024*1024):.2f} MB, Free: {free_space / (1024*1024):.2f} MB")
+            sys.exit(1)
+
         # Format filename: replace ':' with '-' (e.g., sha256:123 -> sha256-123)
         filename = digest.replace(':', '-')
         save_path = os.path.join(save_dir, filename)
 
         print(f"Downloading blob {digest} ({expected_size / (1024*1024):.2f} MB)...")
         
-        try:
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req) as response, open(save_path, 'wb') as out_file:
-                sha256_hash = hashlib.sha256()
+        downloaded_size = 0
+        if os.path.exists(save_path):
+            downloaded_size = os.path.getsize(save_path)
+            if downloaded_size > expected_size:
+                os.remove(save_path)
                 downloaded_size = 0
-                last_printed_mb = 0
-                
-                while True:
-                    chunk = response.read(8192 * 4) # Increased chunk size for better performance
-                    if not chunk:
-                        break
-                    out_file.write(chunk)
-                    sha256_hash.update(chunk)
-                    downloaded_size += len(chunk)
+
+        last_printed_mb = downloaded_size // (1024 * 1024)
+        
+        while downloaded_size < expected_size:
+            try:
+                req = urllib.request.Request(url)
+                if downloaded_size > 0:
+                    req.add_header('Range', f'bytes={downloaded_size}-')
                     
-                    # Print progress every ~50MB
-                    current_mb = downloaded_size // (1024 * 1024)
-                    if current_mb - last_printed_mb >= 50:
-                        print(f"   ... downloaded {current_mb} MB")
-                        last_printed_mb = current_mb
-            
-            actual_digest = f"sha256:{sha256_hash.hexdigest()}"
-            
-            if downloaded_size != expected_size:
-                print(f"   ❌ Size mismatch for {digest}: expected {expected_size}, got {downloaded_size}")
-                os.remove(save_path)
+                # Use a timeout to detect stalled downloads
+                with urllib.request.urlopen(req, timeout=15) as response, open(save_path, 'ab') as out_file:
+                    while True:
+                        chunk = response.read(8192 * 4)
+                        if not chunk:
+                            break
+                        out_file.write(chunk)
+                        downloaded_size += len(chunk)
+                        
+                        current_mb = downloaded_size // (1024 * 1024)
+                        if current_mb - last_printed_mb >= 50:
+                            print(f"   ... downloaded {current_mb} MB")
+                            last_printed_mb = current_mb
+                            
+            except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as e:
+                print(f"   ⚠️ Download stalled or error ({e}). Retrying in 10 seconds...")
+                time.sleep(10)
+                continue
+            except Exception as e:
+                print(f"   ❌ Unexpected error: {e}")
                 return False
-                
-            if actual_digest != digest:
-                print(f"   ❌ Digest mismatch for {digest}: expected {digest}, got {actual_digest}")
-                os.remove(save_path)
-                return False
-                
-            print(f"   ✅ Blob saved and verified: {save_path}")
-            return True
-            
-        except Exception as e:
-            print(f"   ❌ Failed to download blob {digest}: {e}")
-            if os.path.exists(save_path):
-                os.remove(save_path)
+
+        if downloaded_size != expected_size:
+            print(f"   ❌ Size mismatch for {digest}: expected {expected_size}, got {downloaded_size}")
             return False
+            
+        print(f"   Verifying digest for {digest}...")
+        sha256_hash = hashlib.sha256()
+        with open(save_path, 'rb') as f:
+            while True:
+                chunk = f.read(8192 * 4)
+                if not chunk:
+                    break
+                sha256_hash.update(chunk)
+                
+        actual_digest = f"sha256:{sha256_hash.hexdigest()}"
+        
+        if actual_digest != digest:
+            print(f"   ❌ Digest mismatch for {digest}: expected {digest}, got {actual_digest}")
+            os.remove(save_path)
+            return False
+            
+        print(f"   ✅ Blob saved and verified: {save_path}")
+        return True
 
     def download_model_files(self, model_name: str, manifest: dict):
         """
@@ -249,10 +276,14 @@ def main():
 
     manager = ModelManager()
 
-    if args.download:
-        manager.download_model(args.download)
-    else:
-        parser.print_help()
+    try:
+        if args.download:
+            manager.download_model(args.download)
+        else:
+            parser.print_help()
+    except KeyboardInterrupt:
+        print("\nProcess interrupted by user. Exiting gracefully...")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
